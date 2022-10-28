@@ -21,12 +21,16 @@ inline Primitive get(const JsonPath &path) {
 inline void set(const JsonPath &path, Primitive value) {
     state_map = state_map.set(path.to_string(), std::move(value));
 }
+inline void remove(const JsonPath &path) {
+    state_map = state_map.erase(path.to_string());
+}
 
 namespace nlohmann {
 inline void to_json(json &j, const StateMap &v) {
     for (const auto &[key, value]: v) j[JsonPath(key)] = value;
 }
 }
+
 // `from_json` defined out of `nlohmann`, to be called manually.
 // This avoids getting a reference arg to a default-constructed, non-transient `StateMap` instance.
 StateMap state_from_json(const json &j) {
@@ -306,6 +310,15 @@ void Context::on_action(const Action &action) {
             on_patch(a, create_patch(before_state, state_map));
             // Treat all toggles as immediate actions. Otherwise, performing two toggles in a row and undoing does nothing, since they're compressed into nothing.
             finalize_gesture();
+        },
+        [&](const apply_patch &a) {
+            const auto before_state = state_map;
+            for (const auto &op: a.patch) {
+                if (op.op == Add) set(op.path, op.value.value());
+                else if (op.op == Remove) remove(op.path);
+                else if (op.op == Replace) set(op.path, op.value.value());
+            }
+            on_patch(a, create_patch(before_state, state_map));
         },
         [&](const auto &a) {
             const auto before_state = state_map;

@@ -1233,8 +1233,9 @@ struct close_application {};
 
 struct set_value { JsonPath path; Primitive value; };
 struct set_values { std::map<JsonPath, Primitive> values; };
-//struct patch_value { JsonPatch patch; };
 struct toggle_value { JsonPath path; };
+
+struct apply_patch { JsonPatch patch; };
 
 struct set_imgui_settings { json settings; };
 struct set_imgui_color_style { int id; };
@@ -1260,7 +1261,7 @@ using Action = std::variant<
     open_file_dialog, close_file_dialog,
     close_application,
 
-    set_value, set_values, toggle_value,
+    set_value, set_values, toggle_value, apply_patch,
 
     set_imgui_settings, set_imgui_color_style, set_implot_color_style, set_flowgrid_color_style, set_flowgrid_diagram_color_style,
     set_flowgrid_diagram_layout_style,
@@ -1323,7 +1324,7 @@ const std::map<ID, string> name_for_id{
     {id<set_value>, ActionName(set_value)},
     {id<set_values>, ActionName(set_values)},
     {id<toggle_value>, ActionName(toggle_value)},
-//    {id<patch_value>,              ActionName(patch_value)},
+    {id<apply_patch>, ActionName(apply_patch)},
 
     {id<set_imgui_settings>, "Set ImGui settings"},
     {id<set_imgui_color_style>, "Set ImGui color style"},

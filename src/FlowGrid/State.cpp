@@ -65,6 +65,7 @@ std::variant<Action, bool> merge(const Action &a, const Action &b) {
         case id<set_values>:if (a_id == b_id) return set_values{views::concat(std::get<set_values>(a).values, std::get<set_values>(b).values) | to<std::map>};
             return false;
         case id<toggle_value>:return a_id == b_id && std::get<toggle_value>(a).path == std::get<toggle_value>(b).path;
+        case id<apply_patch>:
         default: return false;
     }
 }
