@@ -176,6 +176,15 @@ bool Field::Vec2::Draw(ImGuiSliderFlags flags) const {
     return edited;
 }
 
+bool Field::Vec2Int::Draw() const {
+    ImVec2ih value = *this;
+    const bool edited = SliderInt2(Name.c_str(), (int *) &value, min, max, nullptr, ImGuiSliderFlags_None);
+    gestured();
+    if (edited) q(set_value{Path, value});
+    HelpMarker();
+    return edited;
+}
+
 bool Field::Vec2::Draw() const { return Draw(ImGuiSliderFlags_None); }
 
 bool Field::Enum::Draw() const {
@@ -557,25 +566,6 @@ void State::Draw() const {
     Demo.DrawWindow(ImGuiWindowFlags_MenuBar);
     FileDialog.Draw();
     Info.DrawWindow();
-}
-
-ImGuiSettingsData::ImGuiSettingsData(ImGuiContext *ctx) {
-    SaveIniSettingsToMemory(); // Populates the `Settings` context members
-    // Convert `ImChunkStream`/`ImVector`s to `vector`s.
-    for (int settings_n = 0; settings_n < ctx->DockContext.NodesSettings.Size; settings_n++) {
-        Nodes.push_back(ctx->DockContext.NodesSettings[settings_n]);
-    }
-    for (auto *settings = ctx->SettingsWindows.begin(); settings != nullptr; settings = ctx->SettingsWindows.next_chunk(settings)) {
-        Windows.push_back(*settings);
-    }
-    for (auto *ts = ctx->SettingsTables.begin(); ts != nullptr; ts = ctx->SettingsTables.next_chunk(ts)) {
-        ImGuiTableColumnSettings *column_settings = ts->GetColumnSettings();
-        const auto *table = TableFindByID(ts->ID);
-        ImGuiTableColumn *column = table->Columns.Data;
-        vector<TableColumnSettings> cs;
-        for (int n = 0; n < ts->ColumnsCount; n++, column++, column_settings++) cs.emplace_back(*column_settings);
-        Tables.push_back({*ts, cs});
-    }
 }
 
 // Copied from `imgui.cpp::ApplyWindowSettings`

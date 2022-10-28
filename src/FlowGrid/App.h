@@ -23,9 +23,10 @@
 #include "Helper/File.h"
 #include "Helper/UI.h"
 
-using Primitive = std::variant<bool, int, float, string, ImVec2, ImVec4>;
+using Primitive = std::variant<bool, int, float, string, ImVec2ih, ImVec2, ImVec4>;
 // These are needed to fully define equality comparison for `Primitive`.
 constexpr bool operator==(const ImVec2 &lhs, const ImVec2 &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
+constexpr bool operator==(const ImVec2ih &lhs, const ImVec2ih &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y; }
 constexpr bool operator==(const ImVec4 &lhs, const ImVec4 &rhs) { return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w; }
 
 namespace FlowGrid {}
@@ -185,6 +186,20 @@ struct Vec2 : Base {
 
     float min, max;
     const char *fmt;
+};
+
+struct Vec2Int : Base {
+    Vec2Int(const StateMember *parent, const string &id, const ImVec2ih &value = {0, 0}, int min = 0, int max = 1)
+        : Base(parent, id), min(min), max(max) {
+        *this = value;
+    }
+
+    operator ImVec2ih() const;
+    Vec2Int &operator=(ImVec2ih v);
+
+    bool Draw() const override;
+
+    int min, max;
 };
 
 struct String : Base {
@@ -1060,25 +1075,49 @@ struct Processes : StateMember {
 };
 
 // These Dock/Window/Table settings are `StateMember` duplicates of those in `imgui.cpp`.
-struct ImGuiDockNodeSettings {
-    ImGuiID ID{}, ParentNodeId{}, ParentWindowId{}, SelectedTabId{};
-    signed char SplitAxis{};
-    char Depth{};
-    ImGuiDockNodeFlags Flags{};
-    ImVec2ih Pos{}, Size{}, SizeRef{};
+struct ImGuiDockNodeSettings : StateMember {
+    using StateMember::StateMember;
+    Int ID{this, "ID"};
+    Int ParentNodeId{this, "ParentNodeId"};
+    Int ParentWindowId{this, "ParentWindowId"};
+    Int SelectedTabId{this, "SelectedTabId"};
+    Int SplitAxis{this, "SplitAxis"};
+    Int Depth{this, "Depth"};
+    Int Flags{this, "Flags"};
+    Vec2Int Pos{this, "Pos"};
+    Vec2Int Size{this, "Size"};
+    Vec2Int SizeRef{this, "SizeRef"};
 };
 
-struct WindowSettings {
-    ImGuiID ID{};
-    ImVec2ih Pos{}, Size, ViewportPos{};
-    ImGuiID ViewportId{}, DockId{}, ClassId{};
-    short DockOrder{};
-    bool Collapsed{};
+struct WindowSettings : StateMember {
+    using StateMember::StateMember;
+    WindowSettings(const StateMember *parent = nullptr, const string &id = "", const ImGuiWindowSettings *ws = nullptr) : StateMember(parent, id) {
+        *this = *ws;
+    }
 
-    WindowSettings() : DockOrder(-1) {}
-    WindowSettings(const ImGuiWindowSettings &ws)
-        : ID(ws.ID), Pos(ws.Pos), Size(ws.Size), ViewportPos(ws.ViewportPos),
-          ViewportId(ws.ViewportId), DockId(ws.DockId), ClassId(ws.ClassId), DockOrder(ws.DockOrder), Collapsed(ws.Collapsed) {}
+    Int ID{this, "ID"};
+    Int ViewportId{this, "ViewportId"};
+    Int DockId{this, "DockId"};
+    Int ClassId{this, "ClassId"};
+    Vec2Int Pos{this, "Pos"};
+    Vec2Int Size{this, "Size"};
+    Vec2Int ViewportPos{this, "ViewportPos"};
+    Int DockOrder{this, "DockOrder", -1};
+    Bool Collapsed{this, "Collapsed"};
+
+    WindowSettings &operator=(const ImGuiWindowSettings &ws) {
+        // todo make `ID : Field::Base` type and use appropriately for these
+        ID = int(ws.ID);
+        Pos = ws.Pos;
+        Size = ws.Size;
+        ViewportPos = ws.ViewportPos;
+        ViewportId = int(ws.ViewportId);
+        DockId = int(ws.DockId);
+        ClassId = int(ws.ClassId);
+        DockOrder = int(ws.DockOrder);
+        Collapsed = ws.Collapsed;
+        return *this;
+    }
 };
 
 struct TableColumnSettings {
@@ -1090,9 +1129,9 @@ struct TableColumnSettings {
     bool IsStretch;
 
     TableColumnSettings() = default;
-    TableColumnSettings(const ImGuiTableColumnSettings &tcs)
-        : WidthOrWeight(tcs.WidthOrWeight), UserID(tcs.UserID), Index(tcs.Index), DisplayOrder(tcs.DisplayOrder),
-          SortOrder(tcs.SortOrder), SortDirection(tcs.SortDirection), IsEnabled(tcs.IsEnabled), IsStretch(tcs.IsStretch) {}
+    TableColumnSettings(const ImGuiTableColumnSettings &cs)
+        : WidthOrWeight(cs.WidthOrWeight), UserID(cs.UserID), Index(cs.Index), DisplayOrder(cs.DisplayOrder),
+          SortOrder(cs.SortOrder), SortDirection(cs.SortDirection), IsEnabled(cs.IsEnabled), IsStretch(cs.IsStretch) {}
 };
 
 struct TableSettings {
@@ -1100,20 +1139,27 @@ struct TableSettings {
     vector<TableColumnSettings> Columns;
 };
 
-struct ImGuiSettingsData {
-    ImGuiSettingsData() = default;
-    explicit ImGuiSettingsData(ImGuiContext *ctx);
+struct ImGuiSettings : StateMember {
+    ImGuiSettings(const StateMember *parent, const string &id) : StateMember(parent, id) {}
 
-    vector<ImGuiDockNodeSettings> Nodes;
-    vector<WindowSettings> Windows;
-    vector<TableSettings> Tables;
-};
+    ImGuiSettings &operator=(ImGuiContext *ctx) {
+        ImGui::SaveIniSettingsToMemory(); // Populates the `Settings` context members
+        // Convert `ImChunkStream`/`ImVector`s to `vector`s.
+        for (int settings_n = 0; settings_n < ctx->DockContext.NodesSettings.Size; settings_n++) {
+            Nodes.push_back(ctx->DockContext.NodesSettings[settings_n]);
+        }
+        for (auto *settings = ctx->SettingsWindows.begin(); settings != nullptr; settings = ctx->SettingsWindows.next_chunk(settings)) {
+            Windows.emplace_back(this, "Windows", settings);
+        }
+        for (auto *ts = ctx->SettingsTables.begin(); ts != nullptr; ts = ctx->SettingsTables.next_chunk(ts)) {
+            ImGuiTableColumnSettings *column_settings = ts->GetColumnSettings();
+            const auto *table = ImGui::TableFindByID(ts->ID);
+            ImGuiTableColumn *column = table->Columns.Data;
+            vector<TableColumnSettings> cs;
+            for (int n = 0; n < ts->ColumnsCount; n++, column++, column_settings++) cs.emplace_back(*column_settings);
+            Tables.push_back({*ts, cs});
+        }
 
-struct ImGuiSettings : StateMember, ImGuiSettingsData {
-    ImGuiSettings(const StateMember *parent, const string &id) : StateMember(parent, id), ImGuiSettingsData() {}
-
-    ImGuiSettings &operator=(const ImGuiSettingsData &other) {
-        ImGuiSettingsData::operator=(other);
         return *this;
     }
 
@@ -1121,6 +1167,10 @@ struct ImGuiSettings : StateMember, ImGuiSettingsData {
     // Should behave just like `ImGui::LoadIniSettingsFromMemory`, but using the structured `...Settings` members
     // in this struct instead of the serialized .ini text format.
     void Apply(ImGuiContext *ctx) const;
+
+    vector<ImGuiDockNodeSettings> Nodes;
+    vector<WindowSettings> Windows;
+    vector<TableSettings> Tables;
 };
 
 struct Info : Window {
@@ -1253,7 +1303,7 @@ struct set_values { std::map<JsonPath, Primitive> values; };
 //struct patch_value { JsonPatch patch; };
 struct toggle_value { JsonPath path; };
 
-struct set_imgui_settings { json settings; };
+struct set_imgui_settings { ImGuiSettings settings; };
 struct set_imgui_color_style { int id; };
 struct set_implot_color_style { int id; };
 struct set_flowgrid_color_style { int id; };
