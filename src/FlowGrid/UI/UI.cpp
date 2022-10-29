@@ -235,6 +235,7 @@ void tick_ui() {
         // ImGui sometimes sets this flags when settings have not, in fact, changed.
         // E.g. if you click and hold a window-resize, it will set this every frame, even if the cursor is still (no window size change).
         // todo instead of using json:
+        //  * Create a `const StateMap &sm` reference to global `StateMap state_map` var local to `App.cpp` (same pattern as current `state/s` pattern)
         //  * Make `StateMember`s (and `State::Update`) return a `StateMap` from their assignment operators instead of modifying in place
         //  (and update all that needs to go along with this)
         //  * create a new `apply_patch` action (started here: https://github.com/khiner/flowgrid/tree/patch-action)
@@ -245,6 +246,9 @@ void tick_ui() {
         //    - `q(apply_patch{patch})`
 //        const json new_settings = ImGuiSettingsData(c.ui->imgui_context);
 //        if (json(s.ImGuiSettings) != new_settings) q(set_imgui_settings{new_settings});
+//        const auto &patch = json::diff(s.ImGuiSettings, ImGuiSettings(c.ui->imgui_context));
+        s.ImGuiSettings = c.ui->imgui_context;
+//        if (!patch.empty()) q(apply_patch{patch});
         io.WantSaveIniSettings = false;
     }
 

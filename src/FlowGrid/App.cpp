@@ -180,7 +180,6 @@ void State::Update(const Action &action) {
         [&](const open_file_dialog &a) { FileDialog = a.dialog; },
         [&](const close_file_dialog &) { FileDialog.Visible = false; },
 
-        [&](const set_imgui_settings &a) { ImGuiSettings = a.settings; },
         [&](const set_imgui_color_style &a) {
             switch (a.id) {
                 case 0: Style.ImGui.ColorsDark();
@@ -311,6 +310,15 @@ void Context::on_action(const Action &action) {
             on_patch(a, create_patch(before_state, state_map));
             // Treat all toggles as immediate actions. Otherwise, performing two toggles in a row and undoing does nothing, since they're compressed into nothing.
             finalize_gesture();
+        },
+        [&](const apply_patch &a) {
+            const auto before_state = state_map;
+            for (const auto &op: a.patch) {
+                if (op.op == Add) set(op.path, op.value.value());
+                else if (op.op == Remove) remove(op.path);
+                else if (op.op == Replace) set(op.path, op.value.value());
+            }
+            on_patch(a, create_patch(before_state, state_map));
         },
         [&](const auto &a) {
             const auto before_state = state_map;
